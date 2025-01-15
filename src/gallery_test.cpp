@@ -4,96 +4,70 @@
 #include <SD.h>
 #include <JPEGDecoder.h>
 
-// Define CS pin for SD card
-#define SD_CS 5
-
-// Initialize TFT
+#define SD_CS 5 // SD card CS pin
 TFT_eSPI tft = TFT_eSPI();
 
-// Function prototypes
+// Declare the function prototype
 void displayImage(const char *filename, int xpos, int ypos);
-void renderJPEG(int xpos, int ypos);
 
 void setup() {
   Serial.begin(115200);
 
   // Initialize TFT display
   tft.init();
-  tft.setRotation(1); // Adjust rotation for landscape
+  tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
 
   // Initialize SD card
   if (!SD.begin(SD_CS)) {
     Serial.println("Failed to initialize SD card!");
-    tft.setTextColor(TFT_RED, TFT_BLACK);
     tft.setCursor(10, 10);
     tft.println("SD Card Init Failed!");
-    while (true); // Halt execution
+    while (true);
   }
-  Serial.println("SD card initialized successfully.");
+  Serial.println("SD card initialized.");
 
-  // Display images in sequence
+  // Call the displayImage function
   displayImage("/1.jpg", 0, 0);
-  delay(2000); // Display each image for 2 seconds
-  displayImage("/2.jpg", 0, 0);
-  delay(2000);
-  displayImage("/3.jpg", 0, 0);
 }
 
 void loop() {
-  // Loop through images continuously
-  displayImage("/1.jpg", 0, 0);
-  delay(2000);
-  displayImage("/2.jpg", 0, 0);
-  delay(2000);
-  displayImage("/3.jpg", 0, 0);
-  delay(2000);
+  // Do nothing
 }
 
-// Function to display JPEG image
+// Define the displayImage function
 void displayImage(const char *filename, int xpos, int ypos) {
-  Serial.print("Displaying image: ");
+  Serial.print("Attempting to display: ");
   Serial.println(filename);
 
-  // Open the image file
+  // Open the file
   File file = SD.open(filename);
   if (!file) {
     Serial.println("Failed to open file!");
-    tft.setTextColor(TFT_RED, TFT_BLACK);
     tft.setCursor(10, 10);
-    tft.println("Failed to open file!");
+    tft.println("File Open Failed!");
     return;
   }
 
-  // Decode and render the image
-  if (JpegDec.decodeSdFile(file)) {
-    renderJPEG(xpos, ypos);
-  } else {
+  // Decode the JPEG image
+  if (!JpegDec.decodeSdFile(file)) {
     Serial.println("JPEG decode failed!");
+    file.close();
+    return;
+  }
+
+  Serial.print("Image size: ");
+  Serial.print(JpegDec.width);
+  Serial.print("x");
+  Serial.println(JpegDec.height);
+
+  // Render the JPEG image
+  while (JpegDec.read()) {
+    uint16_t *pImg = JpegDec.pImage;
+    int mcu_x = JpegDec.MCUx * JpegDec.MCUWidth;
+    int mcu_y = JpegDec.MCUy * JpegDec.MCUHeight;
+    tft.pushImage(xpos + mcu_x, ypos + mcu_y, JpegDec.MCUWidth, JpegDec.MCUHeight, pImg);
   }
 
   file.close();
-}
-
-// Function to render decoded JPEG
-void renderJPEG(int xpos, int ypos) {
-  uint16_t *pImg;
-  uint16_t mcu_w = JpegDec.MCUWidth;
-  uint16_t mcu_h = JpegDec.MCUHeight;
-  uint16_t max_x = JpegDec.width;
-  uint16_t max_y = JpegDec.height;
-
-  while (JpegDec.read()) {
-    pImg = JpegDec.pImage;
-    int mcu_x = JpegDec.MCUx * mcu_w;
-    int mcu_y = JpegDec.MCUy * mcu_h;
-
-    if (mcu_x + mcu_w <= max_x && mcu_y + mcu_h <= max_y) {
-      tft.pushImage(xpos + mcu_x, ypos + mcu_y, mcu_w, mcu_h, pImg);
-    } else if (mcu_x + mcu_w > max_x || mcu_y + mcu_h > max_y) {
-      int clipped_w = (mcu_x + mcu_w > max_x) ? max_x - mcu_x : mcu_w;
-      int clipped_h = (mcu_y + mcu_h > max_y) ? max_y - mcu_y : mcu_h;
-      tft.pushImage(xpos + mcu_x, ypos + mcu_y, clipped_w, clipped_h, pImg);
-    }
-  }
 }
