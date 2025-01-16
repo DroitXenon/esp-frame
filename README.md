@@ -7,3 +7,4 @@ This is an ESP32-based project that combines a digital photo gallery and a clock
 
 #include <lvgl.h>
 
+#include <JPEGDEC.h>
